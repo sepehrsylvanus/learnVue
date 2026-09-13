@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import VuePreview from "./vue-preview";
 import { useDark } from "@/lib/use-dark";
 import { useProgress } from "@/components/progress-provider";
+import { setSandboxFiles, removeSandbox } from "@/lib/sandbox-store";
 
 const CodeEditor = dynamic(() => import("./code-editor"), {
   ssr: false,
@@ -67,6 +68,13 @@ export default function Playground({
     }
     setRestored(true);
   }, [ready, restored, persist, files, fileNames, getCode, levelId, scope]);
+
+  // ثبت کد فعلی در استور سراسری برای دستیار AI
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSandboxFiles(levelId, scope, live);
+    return () => removeSandbox(levelId, scope);
+  }, [levelId, scope, live]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");

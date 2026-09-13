@@ -6,6 +6,7 @@ import type { Level } from "@/content/types";
 import { levels } from "@/content";
 import { useProgress } from "./progress-provider";
 import LessonBlocks from "./lesson-blocks";
+import ProjectSteps from "./project-steps";
 import Playground from "./playground/playground";
 import Quiz from "./quiz";
 import LevelSidebar from "./level-sidebar";
@@ -125,17 +126,8 @@ export default function LevelView({ level }: { level: Level }) {
               <h2 className="text-xl font-extrabold">{level.project.title}</h2>
               <p className="mt-2 text-slate-600 dark:text-slate-300">{level.project.brief}</p>
 
-              <h4 className="mt-5 mb-2 font-bold">📋 قدم به قدم:</h4>
-              <ol className="space-y-2 text-sm">
-                {level.project.steps.map((step, i) => (
-                  <li key={i} className="flex gap-3">
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      {i + 1}
-                    </span>
-                    <span className="text-slate-600 dark:text-slate-300">{step}</span>
-                  </li>
-                ))}
-              </ol>
+              <h4 className="mt-5 mb-2 font-bold">🪜 قدم به قدم — هر قدم رو بنویس، «بررسی کن» بزن و بعد قدم بعدی باز می‌شه:</h4>
+              <ProjectSteps level={level} />
             </div>
 
             <Playground

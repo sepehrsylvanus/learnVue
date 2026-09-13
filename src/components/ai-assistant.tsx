@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { Block } from "@/content/types";
 import { getLevel } from "@/content";
+import { getSandboxSnapshot, sandboxToText } from "@/lib/sandbox-store";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -38,16 +39,31 @@ function levelContext(slug: string | null): string {
   if (!slug) return "";
   const level = getLevel(slug);
   if (!level) return "";
-  const learn = level.learn.slice(0, 30).map(blockToText).join("\n\n");
+  const learn = level.learn.slice(0, 60).map(blockToText).join("\n\n");
   const quiz = level.quiz.map((q) => `${q.question} → ${q.options[q.answer]}`).join("\n");
+  const steps = level.project.steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const ctx = [
     `مرحله‌ی ${level.id}: ${level.title} — ${level.tagline}`,
     learn,
+    `پروژه‌ی این مرحله: ${level.project.title}\n${level.project.brief}\nقدم‌های پروژه:\n${steps}`,
     quiz && `سوالات کوییز این مرحله:\n${quiz}`,
   ]
     .filter(Boolean)
     .join("\n\n");
-  return ctx.length > 6000 ? ctx.slice(0, 6000) : ctx;
+  return ctx.length > 8000 ? ctx.slice(0, 8000) : ctx;
+}
+
+/** کد زنده‌ی sandbox ها (فقط مربوط به همین مرحله) */
+function sandboxContext(slug: string | null): string {
+  if (!slug) return "";
+  const level = getLevel(slug);
+  if (!level) return "";
+  const snapshot = getSandboxSnapshot();
+  const relevant: Record<string, Record<string, string>> = {};
+  for (const [key, files] of Object.entries(snapshot)) {
+    if (key.startsWith(`${level.id}:`)) relevant[key] = files;
+  }
+  return sandboxToText(relevant);
 }
 
 /** رندر ساده‌ی مارک‌داون: بلاک کد + بولد */
@@ -114,7 +130,11 @@ export default function AiAssistant() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next.slice(-12), context: levelContext(slug) }),
+        body: JSON.stringify({
+          messages: next.slice(-12),
+          context: levelContext(slug),
+          sandbox: sandboxContext(slug),
+        }),
       });
       const data = (await res.json()) as { reply?: string; error?: string };
       if (!res.ok || !data.reply) {

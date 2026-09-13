@@ -34,3 +34,4 @@ next-env.d.ts
 # local file database
 /data/
 
+write.html

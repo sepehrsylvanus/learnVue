@@ -7,17 +7,27 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 /** حداکثر پیام‌هایی که به مدل می‌فرستیم (اول مکالمه کوتاه می‌شود) */
 const MAX_HISTORY = 12;
 
-function buildSystemPrompt(context: string): string {
+function buildSystemPrompt(context: string, sandbox: string): string {
   return [
     "تو دستیار هوشمند دوره‌ی «ویوکده» هستی — یک پلتفرم فارسی و بامزه برای یادگیری Vue 3.",
     "لحن تو خیلی دوستانه، صمیمی و خودمونی‌ئه؛ مثل یه رفیق باحال که برنامه‌نویسی بلده. از ایموجی به مقدار کم و بجا استفاده کن 👋",
     "همیشه به زبان فارسی روان و خودمونی جواب بده (اصطلاحات تکنیکی رو می‌تونی انگلیسی نگه داری).",
     "جواب‌ها رو کوتاه و مفید بده؛ اگه سوالی ساده بود، با یه مثال کوتاه Vue توضیح بده.",
+    "",
+    "## کد فعلی کاربر",
+    "کدهایی که کاربر همین الان توی sandbox های پلتفرم نوشته برای تو فرستاده شده (بخش «کدهای فعلی کاربر»).",
+    "اگه کاربر گفت «فلان کارو کردم ولی جواب نمی‌ده» یا مشکلی در کدش داره، حتماً اول کد واقعی خودش رو با دقت بخون،",
+    "بug یا اشتباه رو دقیق پیدا کن و به همون خط اشاره کن. حدس نزن — از روی کد خودش جواب بده!",
+    "اگه کدش درست بود، مطمئنش کن و بگو مشکل از کجاست (مثلاً پیش‌نمایش رو رفرش نکرده).",
+    "هیچ‌وقت کل کد رو از نو ننویس مگه اینکه لازم باشه؛ فقط همون تیکه‌ای که باید عوض شه رو نشون بده.",
+    "",
     "اگه سوال کاربر ربطی به درس فعلی داره، از «محتوای درس» که برات فرستاده شده کمک بگیر و همون مفاهیم رو پوشش بده.",
     "اگه سوالی کلی درباره‌ی Vue، جاوااسکریپت یا وب پرسید، خوشحال جواب بده.",
     "کدها رو داخل بلاک ``` قرار بده و همیشه از Vue 3 با Composition API استفاده کن.",
     "",
-    context ? `محتوای درس فعلی کاربر:\n${context}` : "کاربر الان داخل هیچ مرحله‌ی خاصی نیست؛ سوال‌های کلی Vue رو جواب بده.",
+    context ? `## محتوای درس فعلی کاربر\n${context}` : "کاربر الان داخل هیچ مرحله‌ی خاصی نیست؛ سوال‌های کلی Vue رو جواب بده.",
+    "",
+    sandbox ? `## کدهای فعلی کاربر در sandbox\n${sandbox}` : "الان هیچ کدی توی sandbox کاربر ثبت نشده.",
   ].join("\n");
 }
 
@@ -26,6 +36,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       messages?: ChatMessage[];
       context?: string;
+      sandbox?: string;
     };
 
     const history = Array.isArray(body.messages) ? body.messages.slice(-MAX_HISTORY) : [];
@@ -53,7 +64,7 @@ export async function POST(request: Request) {
         temperature: 0.7,
         max_tokens: 1024,
         messages: [
-          { role: "system", content: buildSystemPrompt(body.context ?? "") },
+          { role: "system", content: buildSystemPrompt(body.context ?? "", body.sandbox ?? "") },
           ...history.map((m) => ({ role: m.role, content: m.content })),
         ],
       }),

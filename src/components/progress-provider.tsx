@@ -17,6 +17,8 @@ export type ProgressState = {
   passedLevels: number[];
   /** مرحله‌هایی که پروژه‌شان هم تمام شده */
   builtLevels: number[];
+  /** قدم‌های تاییدشده‌ی هر مرحله: کلید = levelId */
+  stepsDone: Record<string, number[]>;
   xp: number;
   /** کد ذخیره‌شده‌ی پلی‌گراند: کلید = `${levelId}:${fileName}` */
   code: Record<string, string>;
@@ -29,6 +31,7 @@ const CLIENT_KEY = "vuekade-client-id";
 const EMPTY: ProgressState = {
   passedLevels: [],
   builtLevels: [],
+  stepsDone: {},
   xp: 0,
   code: {},
   nickname: null,
@@ -42,6 +45,12 @@ type Ctx = {
   isUnlocked: (levelId: number) => boolean;
   isPassed: (levelId: number) => boolean;
   isBuilt: (levelId: number) => boolean;
+  /** ایندکس قدم‌های تاییدشده‌ی یک مرحله */
+  stepsPassed: (levelId: number) => number[];
+  /** تایید یک قدم از پروژه */
+  passStep: (levelId: number, stepIndex: number) => void;
+  /** ریست قدم‌های یک مرحله */
+  resetSteps: (levelId: number) => void;
   passLevel: (levelId: number, xp: number) => void;
   markBuilt: (levelId: number) => void;
   saveCode: (levelId: number, file: string, code: string) => void;
@@ -62,6 +71,7 @@ function readLocal(): ProgressState {
     return {
       passedLevels: parsed.passedLevels ?? [],
       builtLevels: parsed.builtLevels ?? [],
+      stepsDone: parsed.stepsDone ?? {},
       xp: parsed.xp ?? 0,
       code: parsed.code ?? {},
       nickname: parsed.nickname ?? null,
@@ -157,6 +167,31 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const stepsPassed = useCallback(
+    (levelId: number) => state.stepsDone[String(levelId)] ?? [],
+    [state.stepsDone],
+  );
+
+  const passStep = useCallback((levelId: number, stepIndex: number) => {
+    setState((prev) => {
+      const key = String(levelId);
+      const current = prev.stepsDone[key] ?? [];
+      if (current.includes(stepIndex)) return prev;
+      return {
+        ...prev,
+        stepsDone: { ...prev.stepsDone, [key]: [...current, stepIndex] },
+      };
+    });
+  }, []);
+
+  const resetSteps = useCallback((levelId: number) => {
+    setState((prev) => {
+      const stepsDone = { ...prev.stepsDone };
+      delete stepsDone[String(levelId)];
+      return { ...prev, stepsDone };
+    });
+  }, []);
+
   const saveCode = useCallback((levelId: number, file: string, code: string) => {
     setState((prev) => ({
       ...prev,
@@ -194,6 +229,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       isUnlocked,
       isPassed,
       isBuilt,
+      stepsPassed,
+      passStep,
+      resetSteps,
       passLevel,
       markBuilt,
       saveCode,
@@ -208,6 +246,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       isUnlocked,
       isPassed,
       isBuilt,
+      stepsPassed,
+      passStep,
+      resetSteps,
       passLevel,
       markBuilt,
       saveCode,
