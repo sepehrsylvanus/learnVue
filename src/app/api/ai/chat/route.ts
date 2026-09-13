@@ -63,6 +63,8 @@ export async function POST(request: Request) {
         model,
         temperature: 0.7,
         max_tokens: 1024,
+        // glm-4.5 به‌صورت پیش‌فرض thinking mode روشن دارد؛ برای چت روان لازم نیست
+        thinking: { type: "disabled" },
         messages: [
           { role: "system", content: buildSystemPrompt(body.context ?? "", body.sandbox ?? "") },
           ...history.map((m) => ({ role: m.role, content: m.content })),

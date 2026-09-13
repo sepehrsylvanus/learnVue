@@ -58,6 +58,91 @@ function parseVerdict(text: string): { passed: boolean; feedback: string } {
   return { passed: false, feedback: cleaned.slice(0, 400) || "نتوانستم کد را بررسی کنم؛ دوباره تلاش کن." };
 }
 
+/** سقف طول کدی که برای داوری می‌فرستیم (بقیه برش می‌خورد) */
+const MAX_CODE_CHARS = 6000;
+/** حداکثر تلاش برای گرفتن جواب از پرووایدر */
+const MAX_ATTEMPTS = 3;
+/** تایم‌اوت هر تلاش */
+const ATTEMPT_TIMEOUT_MS = 60_000;
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function callProvider(
+  body: CheckBody,
+  apiKey: string,
+  baseUrl: string,
+  model: string,
+): Promise<{ reply?: string; providerStatus?: number; providerDetail?: string }> {
+  const code = (body.code ?? "").slice(0, MAX_CODE_CHARS);
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          max_tokens: 512,
+          // glm-4.5 به‌صورت پیش‌فرض thinking mode روشن دارد؛ برای داوریِ JSON لازم نیست
+          // و هم باعث کندی شدید می‌شود هم احتمال timeout را بالا می‌برد.
+          thinking: { type: "disabled" },
+          messages: [
+            {
+              role: "system",
+              content: "تو یک داور دقیق و دوست‌داشتنی کد Vue هستی که فقط JSON خالص و کوتاه جواب می‌دهد.",
+            },
+            { role: "user", content: buildPrompt({ ...body, code }) },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text();
+        console.error(`AI check error (attempt ${attempt}):`, response.status, detail.slice(0, 500));
+        // خطای موقت (5xx یا 429) → بعد از مکث کوتاه دوباره تلاش کن
+        if ((response.status >= 500 || response.status === 429) && attempt < MAX_ATTEMPTS) {
+          await sleep(1500 * attempt);
+          continue;
+        }
+        return { providerStatus: response.status, providerDetail: detail.slice(0, 500) };
+      }
+
+      const data = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const reply = data.choices?.[0]?.message?.content?.trim();
+      if (reply) return { reply };
+
+      console.error(`AI check: empty reply (attempt ${attempt})`);
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(1500 * attempt);
+        continue;
+      }
+      return { providerDetail: "empty reply" };
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
+      console.error(`AI check network error (attempt ${attempt}):`, aborted ? "timeout" : error);
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(1500 * attempt);
+        continue;
+      }
+      return { providerDetail: aborted ? "timeout" : String(error) };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { providerDetail: "unreachable" };
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CheckBody;
@@ -73,42 +158,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "کلید API تنظیم نشده است." }, { status: 500 });
     }
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const result = await callProvider(body, apiKey, baseUrl, model);
+
+    if (result.reply) {
+      return NextResponse.json(parseVerdict(result.reply));
+    }
+
+    return NextResponse.json(
+      {
+        error: "داور الان در دسترس نیست 🥲 یه بار دیگه امتحان کن.",
+        detail: result.providerDetail,
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        max_tokens: 400,
-        messages: [
-          { role: "system", content: "تو یک داور دقیق و دوست‌داشتنی کد Vue هستی که فقط JSON خالص جواب می‌دهد." },
-          { role: "user", content: buildPrompt(body) },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text();
-      console.error("AI check error:", response.status, detail);
-      return NextResponse.json(
-        { error: "داور الان در دسترس نیست 🥲 یه بار دیگه امتحان کن." },
-        { status: 502 },
-      );
-    }
-
-    const data = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const reply = data.choices?.[0]?.message?.content?.trim();
-
-    if (!reply) {
-      return NextResponse.json({ error: "جواب خالی برگشت؛ دوباره امتحان کن." }, { status: 502 });
-    }
-
-    return NextResponse.json(parseVerdict(reply));
+      { status: 502 },
+    );
   } catch (error) {
     console.error("AI check route error:", error);
     return NextResponse.json(
