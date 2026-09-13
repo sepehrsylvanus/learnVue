@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vue Sandbox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --vx-bg: #ffffff;
+        --vx-fg: #0f172a;
+        --vx-muted: #64748b;
+        --vx-brand: #42b883;
+        --vx-brand-2: #35495e;
+        --vx-border: #e2e8f0;
+      }
+      html.dark {
+        color-scheme: dark;
+        --vx-bg: #0b1220;
+        --vx-fg: #e2e8f0;
+        --vx-muted: #94a3b8;
+        --vx-border: #1e293b;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; }
+      body {
+        font-family: Vazirmatn, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+        background: var(--vx-bg);
+        color: var(--vx-fg);
+        padding: 18px;
+        line-height: 1.9;
+        font-size: 15px;
+      }
+      #app { min-height: 10px; }
+      button {
+        font-family: inherit;
+        font-size: 14px;
+        border: 1px solid var(--vx-border);
+        background: var(--vx-brand);
+        color: #04291b;
+        font-weight: 700;
+        border-radius: 12px;
+        padding: 7px 14px;
+        cursor: pointer;
+        transition: transform .12s ease, filter .12s ease;
+      }
+      button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+      button:active { transform: translateY(0); }
+      input, select, textarea {
+        font-family: inherit;
+        font-size: 14px;
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--vx-border);
+        background: var(--vx-bg);
+        color: var(--vx-fg);
+        outline: none;
+      }
+      input:focus, select:focus, textarea:focus { border-color: var(--vx-brand); }
+      ul, ol { padding-inline-start: 22px; }
+      h1 { font-size: 22px; margin: 0 0 10px; }
+      h2 { font-size: 18px; margin: 0 0 8px; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      a { color: var(--vx-brand); }
+      .vx-error {
+        white-space: pre-wrap;
+        direction: ltr;
+        text-align: left;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+        line-height: 1.7;
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+        border-radius: 14px;
+        padding: 14px;
+        margin: 0;
+      }
+      html.dark .vx-error {
+        background: #2a1114;
+        color: #fca5a5;
+        border-color: #7f1d1d;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="vx-error-slot"></div>
+
+    <script type="module">
+      import * as Vue from "/vendor/vue.esm-browser.prod.js";
+      import { loadModule } from "/vendor/vue3-sfc-loader.esm.js";
+
+      const errorSlot = document.getElementById("vx-error-slot");
+      let currentApp = null;
+      let injectedStyles = [];
+      let renderToken = 0;
+
+      function post(message) {
+        parent.postMessage({ source: "vue-sandbox", ...message }, "*");
+      }
+
+      function showError(err) {
+        const text = (err && (err.stack || err.message)) || String(err);
+        errorSlot.innerHTML = "";
+        const pre = document.createElement("pre");
+        pre.className = "vx-error";
+        pre.textContent = "💥 خطا در اجرای کد:\n\n" + text;
+        errorSlot.appendChild(pre);
+        post({ type: "error", message: String((err && err.message) || err) });
+      }
+
+      function clearError() {
+        errorSlot.innerHTML = "";
+      }
+
+      function cleanup() {
+        try {
+          if (currentApp) currentApp.unmount();
+        } catch {
+          /* ignore */
+        }
+        currentApp = null;
+        injectedStyles.forEach((el) => el.remove());
+        injectedStyles = [];
+        document.getElementById("app").innerHTML = "";
+      }
+
+      async function render(files) {
+        const token = ++renderToken;
+        cleanup();
+        clearError();
+
+        const options = {
+          moduleCache: { vue: Vue },
+          getFile(url) {
+            const key = url.startsWith("/") ? url : "/" + url;
+            if (files[key] !== undefined) {
+              return Promise.resolve({
+                getContentData: () => files[key],
+                type: key.slice(key.lastIndexOf(".")),
+              });
+            }
+            throw new Error(`فایل پیدا نشد: ${key}`);
+          },
+          addStyle(textContent) {
+            const style = document.createElement("style");
+            style.textContent = textContent;
+            document.head.appendChild(style);
+            injectedStyles.push(style);
+          },
+          log() {},
+          handleModule(type, getContentData) {
+            if (type === ".json") return JSON.parse(getContentData(false));
+            return undefined;
+          },
+        };
+
+        try {
+          const component = await loadModule("/App.vue", options);
+          if (token !== renderToken) return;
+          const app = Vue.createApp(component);
+          app.config.errorHandler = (err) => showError(err);
+          app.config.warnHandler = () => {};
+          app.mount("#app");
+          currentApp = app;
+          post({ type: "ready" });
+        } catch (err) {
+          if (token !== renderToken) return;
+          showError(err);
+        }
+      }
+
+      window.addEventListener("message", (event) => {
+        const data = event.data;
+        if (!data || data.target !== "vue-sandbox") return;
+        if (data.type === "render") {
+          document.documentElement.classList.toggle("dark", !!data.dark);
+          render(data.files || {});
+        }
+        if (data.type === "theme") {
+          document.documentElement.classList.toggle("dark", !!data.dark);
+        }
+      });
+
+      window.addEventListener("error", (e) => showError(e.error || e.message));
+      window.addEventListener("unhandledrejection", (e) => showError(e.reason));
+
+      post({ type: "boot" });
+    </script>
+  </body>
+</html>

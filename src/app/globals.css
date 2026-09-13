@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: Vazirmatn, ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-vue: #42b883;
+  --color-vue-dark: #35495e;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- scrollbars ---------- */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.4);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- code editor ---------- */
+.cm-editor {
+  height: 100%;
+  direction: ltr;
+  text-align: left;
+  font-size: 13.5px;
+}
+.cm-editor .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.75;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+
+/* ---------- animations ---------- */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+.animate-floaty {
+  animation: floaty 5s ease-in-out infinite;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-pop {
+  animation: pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+.animate-shake {
+  animation: shake 0.3s ease-in-out 2;
+}
+
+.grid-bg {
+  background-image:
+    radial-gradient(circle at 20% 10%, rgb(66 184 131 / 0.18), transparent 45%),
+    radial-gradient(circle at 85% 0%, rgb(99 102 241 / 0.18), transparent 40%);
+}
+
+.ltr-code {
+  direction: ltr;
+  text-align: left;
+}

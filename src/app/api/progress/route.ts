@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { getLearner, upsertLearner } from "@/lib/local-db";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const clientId = searchParams.get("clientId");
+  if (!clientId) {
+    return NextResponse.json({ error: "clientId is required" }, { status: 400 });
+  }
+
+  const record = await getLearner(clientId);
+  return NextResponse.json({ progress: record });
+}
+
+type Body = {
+  clientId?: string;
+  xp?: number;
+  nickname?: string | null;
+  state?: unknown;
+};
+
+export async function POST(request: Request) {
+  let body: Body;
+  try {
+    body = (await request.json()) as Body;
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+
+  const clientId = body.clientId;
+  if (!clientId) {
+    return NextResponse.json({ error: "clientId is required" }, { status: 400 });
+  }
+
+  const record = {
+    clientId,
+    nickname: body.nickname ?? null,
+    xp: Number.isFinite(body.xp) ? Number(body.xp) : 0,
+    state: (body.state ?? {}) as Record<string, unknown>,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    const saved = await upsertLearner(record);
+    return NextResponse.json({ progress: saved });
+  } catch (error) {
+    console.error("local db write failed:", error);
+    return NextResponse.json({ progress: null, offline: true });
+  }
+}
